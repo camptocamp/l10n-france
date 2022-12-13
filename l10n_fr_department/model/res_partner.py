@@ -3,6 +3,8 @@
 # License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl).
 
 from odoo import api, fields, models
+from odoo.tools.cache import ormcache
+from odoo.tools.misc import groupby
 
 
 class ResPartner(models.Model):
@@ -18,33 +20,35 @@ class ResPartner(models.Model):
     @api.depends("zip", "country_id", "country_id.code")
     # If a department code changes, it will have to be manually recomputed
     def _compute_department(self):
-        rcdo = self.env["res.country.department"]
+        def _get_zipcode(p) -> str:
+            if not p.country_id.id or p.country_id.id not in fr_country_ids:
+                return ""
+            p_zip = p.zip
+            if not p_zip or len(p_zip) != 5:
+                return ""
+            return p_zip.strip().replace(" ", "").rjust(5, "0")
+
         fr_country_ids = (
             self.env["res.country"]
             .search([("code", "in", ("FR", "GP", "MQ", "GF", "RE", "YT"))])
             .ids
         )
-        for partner in self:
+        for zipcode, partner_list in groupby(self, key=_get_zipcode):
             dpt_id = False
-            zipcode = partner.zip
-            if (
-                partner.country_id
-                and partner.country_id.id in fr_country_ids
-                and zipcode
-                and len(zipcode) == 5
-            ):
-                zipcode = partner.zip.strip().replace(" ", "").rjust(5, "0")
+            if zipcode:
                 code = self._fr_zipcode_to_department_code(zipcode)
-                dpt = rcdo.search(
-                    [
-                        ("code", "=", code),
-                        ("country_id", "in", fr_country_ids),
-                    ],
-                    limit=1,
+                dpt_id = (
+                    self.env["res.country.department"]
+                    .search(
+                        [("code", "=", code), ("country_id", "in", fr_country_ids)],
+                        limit=1,
+                    )
+                    .id
                 )
-                dpt_id = dpt and dpt.id or False
-            partner.department_id = dpt_id
+            self.browse().concat(*partner_list).department_id = dpt_id
 
+    @api.model
+    @ormcache("zipcode")
     def _fr_zipcode_to_department_code(self, zipcode):
         code = zipcode[0:2]
         # https://fr.wikipedia.org/wiki/Liste_des_communes_de_France_dont_le_code_postal_ne_correspond_pas_au_d%C3%A9partement  # noqa
