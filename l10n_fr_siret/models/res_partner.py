@@ -64,26 +64,28 @@ class Partner(models.Model):
     @api.depends("siren", "nic")
     def _compute_siret(self):
         """Concatenate the SIREN and NIC to form the SIRET"""
-        for rec in self:
-            if rec.siren:
-                if rec.nic:
-                    rec.siret = rec.siren + rec.nic
-                else:
-                    rec.siret = rec.siren + "*****"
-            else:
-                rec.siret = False
+        self.siret = ""
+        for partner in self.filtered("siren"):
+            partner.siret = partner.siren + (partner.nic or "*****")
 
     def _inverse_siret(self):
-        for rec in self:
-            if rec.siret:
-                if siret.is_valid(rec.siret):
-                    rec.write({"siren": rec.siret[:9], "nic": rec.siret[9:]})
-                elif siren.is_valid(rec.siret[:9]) and rec.siret[9:] == "*****":
-                    rec.write({"siren": rec.siret[:9], "nic": False})
-                else:
-                    raise ValidationError(_("SIRET '%s' is invalid.") % rec.siret)
-            else:
-                rec.write({"siren": False, "nic": False})
+        """Split the SIRET to find the SIREN and NIC"""
+        self.write({"siren": "", "nic": ""})
+        for partner in self.filtered("siret"):
+            if siret.is_valid(partner.siret):
+                partner.write({"siren": partner.siret[:9], "nic": partner.siret[9:]})
+            elif siren.is_valid(partner.siret[:9]) and partner.siret[9:] == "*****":
+                partner.write({"siren": partner.siret[:9], "nic": ""})
+
+    @api.constrains("siret")
+    def _check_siret_is_valid(self):
+        """Checks whether the SIRET is valid"""
+        for partner in self:
+            if partner.siret and not (
+                siret.is_valid(partner.siret)
+                or (siren.is_valid(partner.siret[:9]) and partner.siret[9:] == "*****")
+            ):
+                raise ValidationError(_("SIRET '%s' is invalid.", partner.siret))
 
     @api.depends("siren", "company_id")
     def _compute_same_siren_partner_id(self):
