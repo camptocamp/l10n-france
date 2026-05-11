@@ -1,0 +1,2 @@
+odoo-addon-intrastat_product@git+https://github.com/OCA/intrastat-extrastat.git@refs/pull/348/head#subdirectory=intrastat_product
+odoo-addon-l10n_fr_siret@git+https://github.com/OCA/l10n-france.git@refs/pull/770/head#subdirectory=l10n_fr_siret
