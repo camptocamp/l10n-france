@@ -510,6 +510,8 @@ class IntrastatProductDeclarationLine(models.Model):
         assert self.fr_regime_id, "Missing Intrastat Type"
         transaction = self.transaction_id
         regime = self.fr_regime_id
+        # no need for is_zero() because amount_company_currency is an integer
+        # on decl lines
         if not self.amount_company_currency:
             raise UserError(
                 self.env._(
@@ -519,7 +521,9 @@ class IntrastatProductDeclarationLine(models.Model):
 
         ldata = {
             "line_number": self.line_number,
-            "amount": self.amount_company_currency,
+            # amount_company_currency is a Monetary field but the DEB XSD
+            # requires invoicedAmount to be an xsd:integer
+            "amount": round(self.amount_company_currency),
             "regime_code": regime.code,
         }
 
@@ -606,7 +610,9 @@ class IntrastatProductDeclarationLine(models.Model):
                     "hs_code": self.hs_code_id.local_code,
                     "src_dest_country_code": self.src_dest_country_code,
                     "product_origin_country_code": self.product_origin_country_code,
-                    "weight": self.weight,
+                    # weight is a Float field but the DEB XSD requires netMass
+                    # to be an xsd:integer
+                    "weight": round(self.weight),
                     "nature_code_first_digit": transaction.code[0],
                     "nature_code_second_digit": transaction.code[1],
                     "transport_code": self.transport_id.code,
