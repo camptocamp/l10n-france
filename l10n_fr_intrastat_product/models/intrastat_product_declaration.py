@@ -54,10 +54,11 @@ class IntrastatProductDeclaration(models.Model):
     def _prepare_invoice_domain(self):
         domain = super()._prepare_invoice_domain()
         if self.declaration_type == "arrivals":
-            for index, entry in enumerate(domain):
-                if entry[0] == "move_type":
-                    domain.pop(index)
-            domain.append(("move_type", "=", "in_invoice"))
+            # Drop the existing ``move_type`` condition
+            domain = domain.map_conditions(
+                lambda cond: Domain.TRUE if cond.field_expr == "move_type" else cond
+            )
+            domain &= Domain("move_type", "=", "in_invoice")
         return domain
 
     def _get_region_code(self, inv_line, notedict):
